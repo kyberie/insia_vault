@@ -496,6 +496,5 @@ module InsiaVault
   # XXX ugly?
   self.init()
 
-
 end
 
