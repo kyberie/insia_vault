@@ -1,0 +1,27 @@
+#!/usr/bin/env ruby
+
+require_relative '../lib/insia_vault'
+
+ARGV.size() == 0 && exit!(0)
+Process.setproctitle(ARGV.join(' ')) rescue nil
+
+# https://stackoverflow.com/questions/6624348/ruby-equivalent-to-which/6624392#6624392
+def which(binary)
+  possibles = ENV['PATH'].split(File::PATH_SEPARATOR)
+  possibles.map {|p| File.join( p, binary ) }.find {|p| File.exists?(p) && File.executable?(p) }
+end
+
+cmd = ARGV.shift()
+if cmd && cmd.include?('/') then
+  if !File.exists?(cmd) || !File.executable?(cmd) then
+    exit!(127)
+  end
+else
+  cmd = which(cmd) || exit!(127)
+end 
+
+undef which
+
+InsiaVault.early_stdin()
+load(cmd)
+
