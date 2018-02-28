@@ -1,4 +1,4 @@
-require "insia_vault/version"
+require 'insia_vault/version'
 require 'fiddle'
 require 'vault'
 
@@ -12,6 +12,8 @@ module InsiaVault
   @@pipe_wr = nil
   @@prctl = nil
   @@main_token = nil
+  @@wrapped_token = nil
+  @@got_token = false
   @@pwd = nil
 
   def self.pipe_wr
@@ -70,33 +72,41 @@ module InsiaVault
     if ENV['RAILS_ENV'] != 'production' then
       if Vault.token != nil then
         self.add_token(Vault.token)
+        @@got_token = true
+        return 1
       end
-      return
-    end
-
-    env = ENV['VAULT_WRAPPED_TOKEN']
-    if (env != nil) then
-      token, ttl = self.unwrap_token(env)
-    end
-
-    if token != nil && ttl != nil then
-      Vault.token = token
-      self.add_token(token, ttl)
-      return 1
     end
 
     token = ttl = nil
 
-    env = ENV['VAULT_WRAPPED_TOKEN_FILE']
-    if (env != nil) then
-      if File.exists?(env) then
-        token, ttl = self.unwrap_token(File.read(env).chomp().strip())
+    if @@wrapped_token != nil then
+      token, ttl = self.unwrap_token(@@wrapped_token)
+    elsif ENV['VAULT_WRAPPED_TOKEN_STDIN'] != nil then
+      token, ttl = self.unwrap_token($stdin.read().lines[0].chomp().strip())
+    end
+
+    if token == nil || ttl == nil then
+      token = ttl = nil
+      env = ENV['VAULT_WRAPPED_TOKEN']
+      if (env != nil) then
+        token, ttl = self.unwrap_token(env)
+      end
+    end
+
+    if token == nil || ttl == nil then
+      token = ttl = nil
+      env = ENV['VAULT_WRAPPED_TOKEN_FILE']
+      if (env != nil) then
+        if File.exists?(env) then
+          token, ttl = self.unwrap_token(File.read(env).chomp().strip())
+        end
       end
     end
 
     if token != nil && ttl != nil then
       Vault.token = token
       self.add_token(token, ttl)
+      @@got_token = true
       return 1
     end
 
@@ -104,6 +114,11 @@ module InsiaVault
     $stderr.puts(msg)
     self.log(msg)
     exit!(1)
+  end
+
+
+  def self.early_stdin
+    @@wrapped_token ||= $stdin.read().lines[0].chomp().strip()
   end
 
 
@@ -145,13 +160,17 @@ module InsiaVault
       Vault.token = old_token
     end
 
-    msg = 'OK unwrapped token with policies: ' + resp.auth.policies.join(', ')
+    ttl = resp.auth.lease_duration - (Time.now() - cr_time).to_i
+
+    msg = 'OK unwrapped token with ttl ' + ttl.to_s + ', policies: ' + resp.auth.policies.join(', ')
+    $stderr.puts(msg)
+    self.log(msg)
+    msg = 'OK metadata: ' + resp.auth.metadata.to_json()
     $stderr.puts(msg)
     self.log(msg)
     Vault.token ||= resp.auth.client_token
 
-    elapsed = (Time.now() - cr_time).to_i
-    return resp.auth.client_token, resp.auth.lease_duration - elapsed
+    return resp.auth.client_token, ttl
   end
 
 
@@ -177,7 +196,7 @@ module InsiaVault
     puts('OK token ttl = ' + ttl.to_s)
     return ttl
   end
-  
+
 
   def self.renew_token(token)
     resp=nil
@@ -303,12 +322,12 @@ module InsiaVault
     pipe2_rd, pipe2_wr = IO.pipe()
     pipe2_rd.binmode()
     pipe2_wr.binmode()
-    
+
 
     # XXX iterate over /proc/(p)pid/status and /proc/pid/cmdline (up to init)
 
     pid1 = fork()
-    
+
     if pid1 != nil
       @@pipe_rd.close()
       pipe2_wr.close()
@@ -321,7 +340,7 @@ module InsiaVault
     else
       @@pipe_wr.close()
       pipe2_rd.close()
-      
+
       pid2 = fork()
       self.after_fork()
       if pid2 != nil then
@@ -364,9 +383,9 @@ module InsiaVault
       Dir.chdir('/')
       trap 'SIGHUP', 'IGNORE'
       trap 'SIGPIPE', 'IGNORE'
-      
+
       puts('OK starting renewer (' + @@pid_renewer + ') for PID ' + @@pid_originator + ' in ' + @@pwd)
-    
+
       got_eof=0
       buf=''
       leases = Hash.new()
@@ -388,7 +407,7 @@ module InsiaVault
         rescue EOFError
           got_eof=1
         end
-        
+
         now = Time.now()
         timediff = (now - last_check).to_i
         puts('OK timediff ' + timediff.to_s)
@@ -473,7 +492,7 @@ module InsiaVault
         last_check = now
 
       end
-    
+
       # revoke tokens. their leases should be revoked automatically
       if ENV['RAILS_ENV'] == 'production' then
         tokens.each_key() do |token|
