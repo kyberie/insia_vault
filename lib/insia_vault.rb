@@ -154,7 +154,9 @@ module InsiaVault
       #   Vault.token = old_token
       #   return nil, nil
     rescue Exception => e
-      msg = 'sys/wrapping/lookup failed'
+      msg = 'sys/wrapping/lookup or sys/wrapping/unwrap failed'
+      msg += e.message
+      msg += caller.join("\n")
       $stderr.puts(msg)
       self.log(msg)
       self.alert(msg, e.message, caller.join("\n"))
@@ -189,6 +191,8 @@ module InsiaVault
       ttl = resp.data[:ttl]
     rescue Exception => e
       msg = 'auth/token/lookup-self failed'
+      msg += e.message
+      msg += caller.join("\n")
       $stderr.puts(msg)
       self.alert(msg, e.message, caller.join("\n"))
       exit!(1)
@@ -298,6 +302,8 @@ module InsiaVault
       end
     rescue Exception => e
       msg = 'fetch_wrapped_token ' + path + ' failed'
+      msg += e.message
+      msg += caller.join("\n")
       $stderr.puts(msg)
       self.log(msg)
       self.alert(msg, e.message, caller.join("\n"))
