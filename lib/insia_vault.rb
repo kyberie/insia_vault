@@ -82,7 +82,8 @@ module InsiaVault
     if @@wrapped_token != nil then
       token, ttl = self.unwrap_token(@@wrapped_token)
     elsif ENV['VAULT_WRAPPED_TOKEN_STDIN'] != nil then
-      token, ttl = self.unwrap_token($stdin.read().lines[0].chomp().strip())
+      line = $stdin.gets()
+      token, ttl = self.unwrap_token(line.chomp().strip()) if line
     end
 
     if token == nil || ttl == nil then
@@ -98,7 +99,8 @@ module InsiaVault
       env = ENV['VAULT_WRAPPED_TOKEN_FILE']
       if (env != nil) then
         if File.exists?(env) then
-          token, ttl = self.unwrap_token(File.read(env).chomp().strip())
+          line = File.read(env)
+          token, ttl = self.unwrap_token(line.chomp().strip()) if line
         end
       end
     end
@@ -118,7 +120,8 @@ module InsiaVault
 
 
   def self.early_stdin
-    @@wrapped_token ||= $stdin.read().lines[0].chomp().strip()
+    line = $stdin.gets()
+    @@wrapped_token ||= line.chomp().strip() if line
   end
 
 
