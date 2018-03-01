@@ -133,7 +133,7 @@ module InsiaVault
         resp = Vault.logical.write('sys/wrapping/lookup', token: wrapped)
       end
       cr_path = resp.data[:creation_path]
-      if !(cr_path == 'auth/approle/login' || cr_path == 'auth/cert/login' || cr_path =~ /^auth\/token\/create\/wrapped_[^\/]+$/) then
+      if !(cr_path == 'auth/approle/login' || cr_path == 'auth/cert/login' || cr_path =~ /^auth\/token\/create\/[^\/]+$/) then
         msg = "Suspicious creation_path '" + cr_path + "' on wrapped token" 
         $stderr.puts(msg)
         self.log(msg)
