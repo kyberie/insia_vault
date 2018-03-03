@@ -1,6 +1,8 @@
 require 'insia_vault/version'
 require 'fiddle'
 require 'vault'
+require 'securerandom'
+require 'openssl'
 
 module InsiaVault
 
@@ -15,6 +17,8 @@ module InsiaVault
   @@wrapped_token = nil
   @@got_token = false
   @@pwd = nil
+  @@masking_digest = nil
+  @@masking_key = nil
 
   def self.pipe_wr
     @@pipe_wr
@@ -166,11 +170,15 @@ module InsiaVault
     end
 
     ttl = resp.auth.lease_duration - (Time.now() - cr_time).to_i
+    acc_hmac = OpenSSL::HMAC.hexdigest(@@masking_digest, @@masking_key, resp.auth.accessor)
 
     msg = 'OK unwrapped token with ttl ' + ttl.to_s + ', policies: ' + resp.auth.policies.join(', ')
     $stderr.puts(msg)
     self.log(msg)
     msg = 'OK metadata: ' + resp.auth.metadata.to_json()
+    $stderr.puts(msg)
+    self.log(msg)
+    msg = 'OK masked accessor: ' + acc_hmac
     $stderr.puts(msg)
     self.log(msg)
     Vault.token ||= resp.auth.client_token
@@ -320,6 +328,9 @@ module InsiaVault
       @@prctl ||= Fiddle::Function.new(libc['prctl'], [Fiddle::TYPE_INT, Fiddle::TYPE_LONG, Fiddle::TYPE_LONG, Fiddle::TYPE_LONG, Fiddle::TYPE_LONG], Fiddle::TYPE_INT) rescue nil
       @@prctl.call(4, 0, 0, 0, 0) rescue nil
     end
+    @@masking_key ||= SecureRandom.random_bytes(16)
+    $stderr.puts('OK masking key: ' + @@masking_key.unpack("H*")[0])
+    @@masking_digest ||= OpenSSL::Digest.new('sha256')
   end
 
 
@@ -393,7 +404,7 @@ module InsiaVault
       trap 'SIGHUP', 'IGNORE'
       trap 'SIGPIPE', 'IGNORE'
 
-      puts('OK starting renewer (' + @@pid_renewer + ') for PID ' + @@pid_originator + ' in ' + @@pwd)
+      puts('OK starting renewer (' + @@pid_renewer + ') for PID ' + @@pid_originator + ' in ' + @@pwd + ', masking key: ' + @@masking_key.unpack("H*")[0])
 
       got_eof=0
       buf=''
