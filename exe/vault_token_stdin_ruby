@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+# XXX obsoleted by vault_token_stdin_helper
+
 require_relative '../lib/insia_vault'
 
 ARGV.size() == 0 && exit!(0)

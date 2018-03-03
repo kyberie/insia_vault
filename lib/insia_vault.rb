@@ -104,6 +104,7 @@ module InsiaVault
       if (env != nil) then
         if File.exists?(env) then
           line = File.read(env)
+          File.delete(env)
           token, ttl = self.unwrap_token(line.chomp().strip()) if line
         end
       end
@@ -328,9 +329,11 @@ module InsiaVault
       @@prctl ||= Fiddle::Function.new(libc['prctl'], [Fiddle::TYPE_INT, Fiddle::TYPE_LONG, Fiddle::TYPE_LONG, Fiddle::TYPE_LONG, Fiddle::TYPE_LONG], Fiddle::TYPE_INT) rescue nil
       @@prctl.call(4, 0, 0, 0, 0) rescue nil
     end
-    @@masking_key ||= SecureRandom.random_bytes(16)
-    $stderr.puts('OK masking key: ' + @@masking_key.unpack("H*")[0])
-    @@masking_digest ||= OpenSSL::Digest.new('sha256')
+    if(@@masking_key == nil)
+      @@masking_key ||= SecureRandom.random_bytes(16)
+      $stderr.puts('OK masking key: ' + @@masking_key.unpack("H*")[0])
+      @@masking_digest ||= OpenSSL::Digest.new('sha256')
+    end
   end
 
 
