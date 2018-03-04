@@ -13,6 +13,7 @@ module InsiaVault
   @@pipe_rd = nil
   @@pipe_wr = nil
   @@prctl = nil
+  @@dup2 = nil
   @@main_token = nil
   @@wrapped_token = nil
   @@got_token = false
@@ -328,6 +329,7 @@ module InsiaVault
       libc ||= Fiddle.dlopen(nil) rescue nil
       @@prctl ||= Fiddle::Function.new(libc['prctl'], [Fiddle::TYPE_INT, Fiddle::TYPE_LONG, Fiddle::TYPE_LONG, Fiddle::TYPE_LONG, Fiddle::TYPE_LONG], Fiddle::TYPE_INT) rescue nil
       @@prctl.call(4, 0, 0, 0, 0) rescue nil
+      @@dup2 ||= Fiddle::Function.new(libc['dup2'], [Fiddle::TYPE_INT, Fiddle::TYPE_INT], Fiddle::TYPE_INT) rescue nil
     end
     if(@@masking_key == nil)
       @@masking_key ||= SecureRandom.random_bytes(16)
@@ -337,7 +339,7 @@ module InsiaVault
   end
 
 
-  def self.start_renewer
+  def self.start_renewer(hide_in_fd0 = false)
     @@pid_originator=Process.pid().to_s
     @@pipe_rd, @@pipe_wr = IO.pipe()
     @@pipe_rd.binmode()
@@ -359,6 +361,17 @@ module InsiaVault
       # get renewer pid
       @@pid_renewer = pipe2_rd.sysread(100) rescue nil
       pipe2_rd.close()
+
+      if hide_in_fd0
+        $stdin.close()
+        c = @@dup2.call(@@pipe_wr.fileno, 0)
+        @@pipe_wr.close()
+        $stdin.reopen('/dev/null')
+        @@pipe_wr = IO.for_fd(c) rescue nil
+        @@pipe_wr.binmode()
+        $stderr.puts('OK stdin is ' + $stdin.fileno.to_s + ', pipe is ' + @@pipe_wr.fileno.to_s)
+      end
+
       return
     else
       @@pipe_wr.close()
