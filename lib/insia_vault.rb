@@ -6,8 +6,7 @@ require 'openssl'
 
 module InsiaVault
 
-  DEFAULT_TIMEOUT = 660
-
+  @@DEFAULT_TIMEOUT = 660
   @@pid_originator = nil
   @@pid_renewer = nil
   @@pipe_rd = nil
@@ -20,6 +19,7 @@ module InsiaVault
   @@pwd = nil
   @@masking_digest = nil
   @@masking_key = nil
+  @@metadata = ' '
 
   def self.pipe_wr
     @@pipe_wr
@@ -69,6 +69,13 @@ module InsiaVault
   def self.log(msg)
     if @@pipe_wr != nil then
       @@pipe_wr.syswrite('log ' + msg.strip().gsub("\n", "\0") + "\n") rescue nil
+    end
+  end
+
+
+  def self.metadata(msg)
+    if @@pipe_wr != nil then
+      @@pipe_wr.syswrite('metadata ' + msg.strip().gsub("\n", "\0") + "\n") rescue nil
     end
   end
 
@@ -184,6 +191,8 @@ module InsiaVault
     $stderr.puts(msg)
     self.log(msg)
     Vault.token ||= resp.auth.client_token
+
+    self.metadata('policies: ' + resp.auth.policies.join(', ') + '. masking key: ' + @@masking_key.unpack("H*")[0] + '. masked accessor: ' + acc_hmac  +  '. metadata: ' + resp.auth.metadata.to_json())
 
     return resp.auth.client_token, ttl
   end
@@ -420,6 +429,7 @@ module InsiaVault
       trap 'SIGHUP', 'IGNORE'
       trap 'SIGPIPE', 'IGNORE'
 
+      start_time = Time.now()
       puts('OK starting renewer (' + @@pid_renewer + ') for PID ' + @@pid_originator + ' in ' + @@pwd + ', masking key: ' + @@masking_key.unpack("H*")[0])
 
       got_eof=0
@@ -427,7 +437,7 @@ module InsiaVault
       leases = Hash.new()
       tokens = Hash.new()
       last_check = Time.now()
-      minttl = DEFAULT_TIMEOUT
+      minttl = @@DEFAULT_TIMEOUT
       partial = 0
 
       # the main loop
@@ -456,8 +466,10 @@ module InsiaVault
           # whole line -> parse
           else
             partial=0
-            if line.start_with?('log ') then 
-              puts(line[4..-1].gsub("\0", "\n"))
+            if line.start_with?('log ') then
+              puts(line[('log '.length())..-1].gsub("\0", "\n"))
+            elsif line.start_with?('metadata ') then
+              @@metadata = ' (' + line[('metadata '.length())..-1].gsub("\0", '').gsub("\n", '') + ')'
             else
               cols = line.split(' ')
               if cols[0] == 'lease' && cols[2] =~ /^[0-9]+$/ then
@@ -480,7 +492,7 @@ module InsiaVault
         break if got_eof == 1
 
         buf = '' if partial == 0   
-        minttl = DEFAULT_TIMEOUT
+        minttl = @@DEFAULT_TIMEOUT
 
         # check tokens
         tokens.each() do |token, ttl|
@@ -493,7 +505,7 @@ module InsiaVault
 
           puts('OK token ttl ' + ttl.to_s)
 
-          if (ttl < (DEFAULT_TIMEOUT + 60)) then
+          if (ttl < (@@DEFAULT_TIMEOUT + 60)) then
             puts('OK token ttl ' + ttl.to_s + ', will renew now')
             ttl = tokens[token] = self.renew_token(token)
           end
@@ -513,7 +525,7 @@ module InsiaVault
           base = lease.split('/')[0..-2].join('/')
           puts('OK lease ' + base + ' ttl ' + ttl.to_s)
 
-          if (ttl < (DEFAULT_TIMEOUT + 60)) then
+          if (ttl < (@@DEFAULT_TIMEOUT + 60)) then
             puts('OK lease ' + base + ' ttl ' + ttl.to_s + ', will renew now')
             ttl = leases[lease] = self.renew_lease(lease)
           end
@@ -523,7 +535,7 @@ module InsiaVault
 
         minttl -= 60
         minttl = 60 if minttl < 10
-        minttl = DEFAULT_TIMEOUT if minttl > DEFAULT_TIMEOUT
+        minttl = @@DEFAULT_TIMEOUT if minttl > @@DEFAULT_TIMEOUT
 
         last_check = now
 
@@ -535,7 +547,7 @@ module InsiaVault
            self.revoke_token(token)
         end
       end
-      puts('OK renewer exit')
+      puts('OK renewer' + @@metadata + ' exit after ' + (Time.now - start_time).to_s + ' seconds')
       exit! 0
     end
   end # start_renewer()
