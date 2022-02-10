@@ -5,7 +5,5 @@ Usage
 -----
 
 ```ruby
-gem 'insia_vault', :git => 'https://git-clone.insia.com/insia_vault.git', :branch => 'master'
+gem 'insia_vault', git: 'https://github.com/kyberie/insia_vault.git'
 ```
-
-
