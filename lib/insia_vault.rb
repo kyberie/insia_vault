@@ -140,9 +140,6 @@ module InsiaVault
   end
 
 
-  end
-
-
   def self.early_stdin
     line = $stdin.gets()
     @@wrapped_token ||= line.chomp().strip() if line
