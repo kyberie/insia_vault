@@ -126,9 +126,20 @@ module InsiaVault
     end
 
     msg='Cannot obtain wrapped token!'
+
+    env = ENV['VAULT_TOKEN_SLEEP_AFTER_FAILURE']
+    if (env != nil) then
+        msg += ' Will sleep for ' + env + ' seconds.'
+    end
     $stderr.puts(msg)
     self.log(msg)
+    if (env != nil) then
+        sleep(env.to_i)
+    end
     exit!(1)
+  end
+
+
   end
 
 
