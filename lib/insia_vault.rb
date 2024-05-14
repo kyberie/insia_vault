@@ -118,6 +118,16 @@ module InsiaVault
       end
     end
 
+    # a regular (not wrapped) token
+    if token == nil || ttl == nil then
+      token = ttl = nil
+      env = ENV['VAULT_TOKEN']
+      if (env != nil) then
+        token = env.chomp().strip()
+        ttl = self.get_token_ttl(token)
+      end
+    end
+
     if token != nil && ttl != nil then
       Vault.token = token
       self.add_token(token, ttl)
