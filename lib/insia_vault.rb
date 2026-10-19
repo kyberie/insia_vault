@@ -110,7 +110,7 @@ module InsiaVault
       token = ttl = nil
       env = ENV['VAULT_WRAPPED_TOKEN_FILE']
       if (env != nil) then
-        if File.exists?(env) then
+        if File.exist?(env) then
           line = File.read(env)
           File.delete(env)
           token, ttl = self.unwrap_token(line.chomp().strip()) if line
